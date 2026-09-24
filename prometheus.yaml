@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 2s
+  evaluation_interval: 2s
+
+rule_files:
+  - /rules/*.yaml
+
+scrape_configs:
+  - job_name: replayer
+    metrics_path: /metrics/default
+    static_configs:
+      - targets:
+          - metrics-replayer:8081
