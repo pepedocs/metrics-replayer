@@ -1,0 +1,48 @@
+services:
+  metrics-replayer:
+    build:
+      context: .
+      dockerfile: Containerfile
+    ports:
+      - "8081:8081"
+    command:
+      - --remote-write-url=http://prometheus:9090/api/v1/write
+      - --prometheus-url=http://prometheus:9090
+      - --rules-dir=/rules
+      - --scrapes-dir=/scrapes
+      - --scrape-target=metrics-replayer:8081
+    volumes:
+      - rules:/rules
+      - scrapes:/scrapes
+
+  metric-producer:
+    build:
+      context: .
+      dockerfile: cmd/metric-producer/Containerfile
+    command:
+      - --backfill=168h
+      - --backfill-step=30s
+    depends_on:
+      - metrics-replayer
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - rules:/rules:ro
+      - scrapes:/scrapes:ro
+    tmpfs:
+      - /prometheus:size=${PROM_STORAGE_SIZE:-2G},uid=65534,gid=65534
+    depends_on:
+      - metrics-replayer
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-lifecycle
+      - --web.enable-remote-write-receiver
+      - --storage.tsdb.retention.time=8d
+
+volumes:
+  rules:
+  scrapes:

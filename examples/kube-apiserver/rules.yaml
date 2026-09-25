@@ -1,0 +1,17 @@
+groups:
+  - name: kube-apiserver
+    rules:
+      - record: cluster_quantile:apiserver_request_duration_seconds:histogram_quantile
+        expr: |
+          histogram_quantile(0.99, sum by (le, verb, resource) (
+            rate(apiserver_request_duration_seconds_bucket{verb!~"WATCH|CONNECT",subresource!~"exec|attach|log|portforward|proxy"}[5m])
+          ))
+        labels:
+          quantile: "0.99"
+      - alert: KubeAPIServerLatencyP99High
+        expr: cluster_quantile:apiserver_request_duration_seconds:histogram_quantile{quantile="0.99"} > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "apiserver p99 latency for {{ $labels.verb }} {{ $labels.resource }} is {{ $value | humanizeDuration }}"

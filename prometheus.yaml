@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 2s
+  evaluation_interval: 2s
+
+# Accept backfilled samples older than data already in the TSDB, so /backfill
+# works while streams are being scraped.
+storage:
+  tsdb:
+    out_of_order_time_window: 8d
+
+rule_files:
+  - /rules/*.yaml
+
+# One file per registered stream, written by the replayer on /register.
+scrape_config_files:
+  - /scrapes/*.yaml
