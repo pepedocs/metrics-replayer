@@ -31,6 +31,7 @@ type ruleFile struct {
 			Alert  string            `yaml:"alert"`
 			Expr   string            `yaml:"expr"`
 			For    string            `yaml:"for"`
+			Keep   string            `yaml:"keep_firing_for"`
 			Labels map[string]string `yaml:"labels"`
 		} `yaml:"rules"`
 	} `yaml:"groups"`
@@ -72,11 +73,15 @@ func (r *Replayer) backfillRules(data []byte, end time.Time, duration, step time
 				if err != nil {
 					return samples, fmt.Errorf("alert %s: invalid for: %w", rule.Alert, err)
 				}
+				keepFor, err := model.ParseDuration(defaultString(rule.Keep, "0s"))
+				if err != nil {
+					return samples, fmt.Errorf("alert %s: invalid keep_firing_for: %w", rule.Alert, err)
+				}
 				for _, res := range results {
 					lbls := withLabels(res.labels, rule.Labels)
 					delete(lbls, model.MetricNameLabel)
 					lbls[model.AlertNameLabel] = rule.Alert
-					pending, firing := alertStates(res.points, step, time.Duration(holdFor))
+					pending, firing := alertStates(res.points, step, time.Duration(holdFor), time.Duration(keepFor))
 					for state, pts := range map[string][]point{"pending": pending, "firing": firing} {
 						if len(pts) == 0 {
 							continue
@@ -101,17 +106,46 @@ func (r *Replayer) backfillRules(data []byte, end time.Time, duration, step time
 }
 
 // alertStates splits the steps where the alert expression returned a value
-// into pending and firing, applying the rule's `for` duration.
-func alertStates(active []point, step, holdFor time.Duration) (pending, firing []point) {
+// into pending and firing, applying `for` and `keep_firing_for`: once firing,
+// the alert keeps firing through gaps up to keepFor, and a gap that short
+// doesn't restart the `for` timer.
+func alertStates(active []point, step, holdFor, keepFor time.Duration) (pending, firing []point) {
+	stepMs, keepMs := step.Milliseconds(), keepFor.Milliseconds()
 	var since int64
+	isFiring := false
 	for i, p := range active {
-		if i == 0 || p.t-active[i-1].t > step.Milliseconds() {
-			since = p.t // a new active run starts
+		if i > 0 {
+			prev := active[i-1].t
+			gap := p.t - prev
+			switch {
+			case gap <= stepMs:
+				// consecutive
+			case isFiring && gap <= keepMs+stepMs:
+				for t := prev + stepMs; t < p.t; t += stepMs {
+					firing = append(firing, point{t, 1})
+				}
+			default:
+				if isFiring {
+					for t := prev + stepMs; t <= prev+keepMs; t += stepMs {
+						firing = append(firing, point{t, 1})
+					}
+				}
+				since, isFiring = p.t, false
+			}
+		} else {
+			since = p.t
 		}
-		if time.Duration(p.t-since)*time.Millisecond >= holdFor {
+		if isFiring || time.Duration(p.t-since)*time.Millisecond >= holdFor {
+			isFiring = true
 			firing = append(firing, point{p.t, 1})
 		} else {
 			pending = append(pending, point{p.t, 1})
+		}
+	}
+	if isFiring && len(active) > 0 {
+		last := active[len(active)-1].t
+		for t := last + stepMs; t <= last+keepMs; t += stepMs {
+			firing = append(firing, point{t, 1})
 		}
 	}
 	return pending, firing

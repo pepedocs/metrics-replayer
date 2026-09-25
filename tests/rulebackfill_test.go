@@ -18,7 +18,8 @@ import (
 )
 
 // fakeRuleProm serves reloads, range queries and remote writes. A query for
-// "active_expr" returns a value only at steps 2..7 of the requested range;
+// "active_expr" returns a value only at steps 2..7 of the requested range,
+// "gappy_expr" at steps 0..5 and 8..10;
 // any other query returns the step index at every step.
 type fakeRuleProm struct {
 	mu      sync.Mutex
@@ -40,6 +41,9 @@ func (f *fakeRuleProm) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		var values []string
 		for i, t := 0, start; t <= end+1e-9; i, t = i+1, t+step {
 			if req.Form.Get("query") == "active_expr" && (i < 2 || i > 7) {
+				continue
+			}
+			if req.Form.Get("query") == "gappy_expr" && (i > 5 && i < 8 || i > 10) {
 				continue
 			}
 			values = append(values, fmt.Sprintf(`[%.3f,"%d"]`, t, i))
@@ -178,5 +182,44 @@ func TestRulesWithoutBackfillUnchanged(t *testing.T) {
 	postRules(t, srv, "", http.StatusCreated)
 	if fake.queries != 0 || len(fake.written) != 0 {
 		t.Errorf("plain create should not query or write: %d queries, %d series", fake.queries, len(fake.written))
+	}
+}
+
+func TestRuleBackfillKeepFiringFor(t *testing.T) {
+	srv, fake := setupRuleBackfill(t)
+	rules := `groups:
+  - name: g
+    rules:
+      - alert: Gappy
+        expr: gappy_expr
+        for: 30s
+        keep_firing_for: 1m
+`
+	resp, err := http.Post(srv.URL+"/rules/k?backfill=5m&step=30s", "application/yaml", strings.NewReader(rules))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	// Active 0..5 and 8..10; the 60s gap is within keep_firing_for, so it is
+	// one firing run from step 1 to step 10, plus 1m kept after the end.
+	var firing []int64
+	for _, ts := range fake.series("alertstate=firing") {
+		for _, s := range ts.Samples {
+			if !math.IsNaN(s.Value) {
+				firing = append(firing, s.Timestamp)
+			}
+		}
+	}
+	if len(firing) != 12 {
+		t.Fatalf("got %d firing samples, want 12 (steps 1..12)", len(firing))
+	}
+	for i := 1; i < len(firing); i++ {
+		if firing[i]-firing[i-1] != 30000 {
+			t.Errorf("firing run broken between %d and %d", firing[i-1], firing[i])
+		}
+	}
+	if n := len(fake.series("alertstate=pending")); n != 1 {
+		t.Errorf("got %d pending series, want 1 (only step 0)", n)
 	}
 }

@@ -1,0 +1,3 @@
+{{- /* A gauge that follows the shape directly, e.g. disk usage ratio. */ -}}
+# TYPE node_filesystem_used_ratio gauge
+node_filesystem_used_ratio{mountpoint="/data"} {{ .Y }}

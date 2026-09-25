@@ -1,0 +1,4 @@
+{{- /* An error ratio: 50 req/s, of which a fraction .Y fail. errors/total = .Y */ -}}
+# TYPE http_requests_total counter
+http_requests_total{service="checkout",code="500"} {{ counter "err" (mul 50 .Y) }}
+http_requests_total{service="checkout",code="200"} {{ counter "ok" (mul 50 (sub 1 .Y)) }}

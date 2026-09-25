@@ -1,0 +1,33 @@
+groups:
+  - name: profiles
+    rules:
+      # Error ratio over short and long windows, per service.
+      - record: service:http_error_ratio:rate1m
+        expr: sum by (service) (rate(http_requests_total{code=~"5.."}[1m])) / sum by (service) (rate(http_requests_total[1m]))
+      - record: service:http_error_ratio:rate5m
+        expr: sum by (service) (rate(http_requests_total{code=~"5.."}[5m])) / sum by (service) (rate(http_requests_total[5m]))
+      - record: service:http_error_ratio:rate1h
+        expr: sum by (service) (rate(http_requests_total{code=~"5.."}[1h])) / sum by (service) (rate(http_requests_total[1h]))
+
+      # launch: fast burn of a 99.9% SLO (14.4x budget over 1h, confirmed by 5m).
+      - alert: ErrorBudgetFastBurn
+        expr: service:http_error_ratio:rate1h > 14.4 * 0.001 and service:http_error_ratio:rate5m > 14.4 * 0.001
+        labels:
+          severity: page
+
+      # step, spikes, flap: static threshold. `for` ignores short spikes;
+      # keep_firing_for holds the alert through brief dips so a flapping
+      # dependency is one incident instead of many.
+      - alert: ErrorRatioHigh
+        expr: service:http_error_ratio:rate1m > 0.05
+        for: 3m
+        keep_firing_for: 5m
+        labels:
+          severity: warning
+
+      # drift: warn before the disk fills, based on the 6h trend.
+      - alert: DiskWillFillIn48h
+        expr: predict_linear(node_filesystem_used_ratio[6h], 48 * 3600) > 1
+        for: 10m
+        labels:
+          severity: ticket
