@@ -51,13 +51,15 @@ metrics-replayer is not a replacement for promtool. Use promtool for syntax vali
 
 ## Use Cases
 
-**Alert development** — Push a metric profile that simulates an incident (e.g., 85% error rate spike over 2 hours). Verify that your burn-rate alert fires at the right threshold and clears on recovery. See the shape in Prometheus graphs.
+These are some common uses, but the replayer isn't limited to them. It works for any scenario you can express as metrics and rules.
+
+**Alert development** — Push a metric profile that simulates an incident (e.g., 85% error rate spike over 2 hours). Verify that your burn-rate alert fires at the right threshold and clears on recovery.
 
 **Burn-rate validation** — Backfill days of data to test slow-burn SLO alerts (72h+6h windows). These are impractical to test in real-time or with promtool's linear DSL.
 
 **Incident replay** — Capture real metrics from a production incident, replay them locally, and verify whether new or modified rules would have caught it.
 
-**Edge case testing** — Low-volume scenarios (3 failures out of 50 provisions) where burn-rate alerts stay silent. Verify the gap exists, then test cause-based alerts that catch it.
+**Visual analysis** — Explore how curves, recording rules and alerts behave together in Prometheus graphs, using the replayed metrics. Compare p50 against p99, see where an alert goes pending and then fires relative to the underlying signal, and tune thresholds and windows by eye before you commit to them.
 
 ---
 
