@@ -33,6 +33,7 @@ You have a failure shape in mind, whether from a real incident, a load test, or 
 
 These are common uses, but the replayer isn't limited to them.
 
+- **Instant alert evaluation**: backfill hours or days of a failure profile and see the complete alert history (pending, firing, resolved) in seconds instead of waiting for it to play out. `for` and `keep_firing_for` are simulated, so you can check that a `for: 2m` suppresses flaky spikes, or that `keep_firing_for` turns a flapping dependency into one incident, then change the rule and re-run right away. See [rule backfill](docs/api.md#rule-backfill) and [profiles](docs/profiles.md).
 - **Alert development**: simulate an incident and check that the alert fires at the right threshold and clears on recovery.
 - **Burn-rate validation**: backfill days of data to test slow-burn SLO alerts (e.g. 72h + 6h windows).
 - **Incident replay**: replay captured production metrics and check whether new or changed rules would have caught the incident.
