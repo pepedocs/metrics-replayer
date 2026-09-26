@@ -41,6 +41,7 @@ Add `--realtime --window 30m` to watch it live instead, or `noise=0.25` to `--pa
 - [Profiles](docs/profiles.md): the built-in failure shapes and how to describe your own metrics
 - [API](docs/api.md): pushing, backfilling and loading rules directly with `curl`
 - [Configuration](docs/configuration.md): flags, Prometheus setup, troubleshooting
+- [Known limitations and enhancements](docs/roadmap.md)
 - Examples: [profiles](examples/profiles), [fast-burn](examples/fast-burn), [api-latency](examples/api-latency), [kube-apiserver](examples/kube-apiserver/README.md)
 
 ## Development
