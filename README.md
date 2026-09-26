@@ -1,15 +1,22 @@
 # metrics-replayer
 
-Replay metric profiles through a real Prometheus and watch how your recording rules and alerts respond.
+A studio for studying metrics and alerts.
+
+Describe how a system misbehaves, whether it's a bad deploy, a launch surge, a flaky dependency or a slow leak. Play it through a real Prometheus and watch what your alerts do. It takes seconds, because history is backfilled and rules are evaluated over it, including `for`. If you'd rather watch it unfold, play it in real time. The Prometheus console is the lens: the metric, the recording rules and the alert states, side by side.
+
+## What it's for
+
+Understanding alerts, before and after they matter:
+
+- **Find blind spots.** Which failures does this alert miss? A slow drift below the threshold, a flake that clears before `for` runs out, a surge the burn-rate windows smooth away.
+- **Plan and decide.** Try thresholds, windows and `for` durations against realistic profiles before an alert reaches production. Where an alert can't cover a failure, decide what the SRE team does instead.
+- **Explain.** Show a reviewer, a teammate or a postmortem why an alert paged 24 times, or never.
+
+Under the hood it's a small, fast tool. It simulates metric profiles (error rates, traffic, anything you can template), evaluates alerts instantly over backfilled history or live in real time, and leaves the evidence in Prometheus to look at.
 
 ```
-your script ──POST /push/{name}──> replayer <──scrape── Prometheus
-                                      │                     ^
-                            POST /backfill ──remote write────┤
-                            POST /rules/{name} ──file + reload─┘
+profile (shape + template) ──▶ replayer ──▶ Prometheus ──▶ graphs, recording rules, ALERTS
 ```
-
-metrics-replayer is an HTTP server in front of Prometheus. You push live metrics, backfill history and load rules with plain `curl`: no protobuf, rule file paths or reload signals.
 
 ## Quick start
 
@@ -21,28 +28,14 @@ go run ./cmd/emit --shape step \
   --rules examples/profiles/rules.yaml
 ```
 
-This backfills 6h of an error ratio with a bad deploy 2h ago, loads the rules and evaluates them over that history, then keeps pushing live. Open [localhost:9091](http://localhost:9091) and graph `service:http_error_ratio:rate5m` or `ALERTS` over 6h.
+This plays a bad deploy from 2h ago into 6h of history and evaluates the rules over it. Open [localhost:9091](http://localhost:9091) and graph `service:http_error_ratio:rate5m` and `ALERTS` over 6h.
 
-To watch it unfold live instead, add `--realtime --window 30m` and set the shape's times inside that window (see [profiles](docs/profiles.md)).
-
-## Why
-
-You have a failure shape in mind, whether from a real incident, a load test, or something you know can happen, and you want to know whether your alerts catch it. `promtool test rules` is good for deterministic CI checks, but its linear series DSL (`0+5x20`) can't express spikes, decay or slow drift, and it shows you no graph. metrics-replayer complements it: send the shape through a real Prometheus and look.
-
-## Use cases
-
-These are common uses, but the replayer isn't limited to them.
-
-- **Instant alert evaluation**: backfill hours or days of a failure profile and see the complete alert history (pending, firing, resolved) in seconds instead of waiting for it to play out. `for` and `keep_firing_for` are simulated, so you can check that a `for: 2m` suppresses flaky spikes, or that `keep_firing_for` turns a flapping dependency into one incident, then change the rule and re-run right away. See [rule backfill](docs/api.md#rule-backfill) and [profiles](docs/profiles.md).
-- **Alert development**: simulate an incident and check that the alert fires at the right threshold and clears on recovery.
-- **Burn-rate validation**: backfill days of data to test slow-burn SLO alerts (e.g. 72h + 6h windows).
-- **Incident replay**: replay captured production metrics and check whether new or changed rules would have caught the incident.
-- **Visual analysis**: explore curves, recording rules and alerts together in Prometheus graphs, and tune thresholds and windows by eye.
+Add `--realtime --window 30m` to watch it live instead, or `noise=0.25` to `--params` to make the curve realistically jagged.
 
 ## Documentation
 
-- [API](docs/api.md): streams, backfill, rules and rule backfill
-- [Profiles](docs/profiles.md): reusable error shapes (launch, step, spikes, drift, flap) and the `emit` generator
+- [Profiles](docs/profiles.md): the built-in failure shapes and how to describe your own metrics
+- [API](docs/api.md): pushing, backfilling and loading rules directly with `curl`
 - [Configuration](docs/configuration.md): flags, Prometheus setup, troubleshooting
 - Examples: [profiles](examples/profiles), [api-latency](examples/api-latency), [kube-apiserver](examples/kube-apiserver/README.md)
 
