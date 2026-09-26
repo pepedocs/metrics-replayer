@@ -33,3 +33,9 @@ Each scrape takes exactly one queued push, and samples get the scrape's timestam
 - Validate rule names, and stream names even without `--scrapes-dir`.
 - The e2e test shares the `default` stream with the demo producer; give it its own stream.
 - `examples/api-latency` has no README.
+
+## Ideas
+
+- **kube-apiserver burn-rate flapping demo.** Replay the kubernetes-mixin `KubeAPIErrorBudgetBurn` rules on a jittery, apiserver-like profile, the case OpenShift clusters see as noisy and teams end up silencing. Show which fix stops the flapping without delaying real incidents: `keep_firing_for`, a minimum-traffic floor, or excluding long-running requests from the SLI.
+- **Flap probability sweep.** Vary how far an incident's burn sits above the threshold (`peak`) and how jittery it is (`noise`), and count pages per incident. An empirical curve for "the closer to the threshold, the more likely it flaps", to set next to the uniform or Gaussian model.
+- **Detectors beyond threshold + `for`.** Compare hysteresis, fraction of time above the threshold (`avg_over_time((expr > bool T)[10m:])`), budget accumulation (CUSUM-style), and a simple ML classifier (e.g. logistic regression on window features) against the PromQL rules on the same replayed profiles. The replayer provides labeled data for free: the shape is the label.

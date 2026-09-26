@@ -20,4 +20,4 @@ emit --template $D/search.tmpl \
   --params baseline=0.0002,peak=0.0165,start=-3h,duration=0,rise=5m,noise=0.5,noise_period=3m,seed=33
 
 # Load the rules and evaluate them over the same 24h.
-curl -sf -X POST "$REPLAYER/rules/slo?backfill=24h" --data-binary @$D/rules.yaml
+curl -sS --fail-with-body -X POST "$REPLAYER/rules/slo?backfill=24h" --data-binary @$D/rules.yaml
