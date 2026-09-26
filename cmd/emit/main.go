@@ -21,7 +21,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/pepedocs/metrics-replayer/shapes"
+	"github.com/pepedocs/metrics-replayer/internal/shapes"
 )
 
 func main() {

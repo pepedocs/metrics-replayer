@@ -25,7 +25,7 @@ Time `t` is relative to the end of the window: `start=-2h` means 2 hours before 
 | `flap` | **Flapping dependency**: `offset + amplitude * sin(2πt/period)`, floored at 0 | `offset=0.1`, `amplitude=0.1`, `period=10m` |
 | `constant` | Flat baseline | `baseline=0.01` |
 
-To add a shape, write one function in [`shapes/shapes.go`](../shapes/shapes.go) and add it to the registry.
+To add a shape, write one function in [`internal/shapes/shapes.go`](../internal/shapes/shapes.go) and add it to the registry.
 
 ## Templates
 

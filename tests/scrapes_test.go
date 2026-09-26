@@ -2,7 +2,7 @@ package tests
 
 import (
 	"fmt"
-	replayer "github.com/pepedocs/metrics-replayer"
+	"github.com/pepedocs/metrics-replayer/internal/replayer"
 	"net/http"
 	"net/http/httptest"
 	"os"

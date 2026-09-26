@@ -13,7 +13,7 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
-	replayer "github.com/pepedocs/metrics-replayer"
+	"github.com/pepedocs/metrics-replayer/internal/replayer"
 	"github.com/prometheus/prometheus/prompb"
 )
 

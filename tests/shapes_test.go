@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pepedocs/metrics-replayer/shapes"
+	"github.com/pepedocs/metrics-replayer/internal/shapes"
 )
 
 func mustNew(t *testing.T, name, params string) shapes.Shape {

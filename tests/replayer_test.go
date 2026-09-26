@@ -1,7 +1,7 @@
 package tests
 
 import (
-	replayer "github.com/pepedocs/metrics-replayer"
+	"github.com/pepedocs/metrics-replayer/internal/replayer"
 	"io"
 	"net/http"
 	"net/http/httptest"

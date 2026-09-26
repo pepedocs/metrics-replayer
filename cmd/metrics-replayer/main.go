@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	replayer "github.com/pepedocs/metrics-replayer"
+	"github.com/pepedocs/metrics-replayer/internal/replayer"
 )
 
 func main() {
