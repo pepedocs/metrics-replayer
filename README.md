@@ -37,11 +37,11 @@ Add `--realtime --window 30m` to watch it live instead, or `noise=0.25` to `--pa
 
 ## Documentation
 
-- [Demo](docs/demo.md): a flaky dependency, step by step, with graphs
+- Demos: [a flaky dependency](docs/demo.md), and [blind spots of burn-rate alerts](docs/demo-fast-burn.md) on realistic, jagged traffic
 - [Profiles](docs/profiles.md): the built-in failure shapes and how to describe your own metrics
 - [API](docs/api.md): pushing, backfilling and loading rules directly with `curl`
 - [Configuration](docs/configuration.md): flags, Prometheus setup, troubleshooting
-- Examples: [profiles](examples/profiles), [api-latency](examples/api-latency), [kube-apiserver](examples/kube-apiserver/README.md)
+- Examples: [profiles](examples/profiles), [fast-burn](examples/fast-burn), [api-latency](examples/api-latency), [kube-apiserver](examples/kube-apiserver/README.md)
 
 ## Development
 

@@ -1,0 +1,40 @@
+# Multi-window, multi-burn-rate alerts for a 99.9% availability SLO
+# (Google SRE workbook, "Alerting on SLOs"), with `for` durations as in the
+# kubernetes-mixin. Error budget: 0.1% of requests.
+groups:
+  - name: slo-burn-rate
+    rules:
+      - record: service:error_ratio:rate5m
+        expr: sum by (service) (rate(http_requests_total{code=~"5.."}[5m])) / sum by (service) (rate(http_requests_total[5m]))
+      - record: service:error_ratio:rate30m
+        expr: sum by (service) (rate(http_requests_total{code=~"5.."}[30m])) / sum by (service) (rate(http_requests_total[30m]))
+      - record: service:error_ratio:rate1h
+        expr: sum by (service) (rate(http_requests_total{code=~"5.."}[1h])) / sum by (service) (rate(http_requests_total[1h]))
+      - record: service:error_ratio:rate2h
+        expr: sum by (service) (rate(http_requests_total{code=~"5.."}[2h])) / sum by (service) (rate(http_requests_total[2h]))
+      - record: service:error_ratio:rate6h
+        expr: sum by (service) (rate(http_requests_total{code=~"5.."}[6h])) / sum by (service) (rate(http_requests_total[6h]))
+      - record: service:error_ratio:rate1d
+        expr: sum by (service) (rate(http_requests_total{code=~"5.."}[1d])) / sum by (service) (rate(http_requests_total[1d]))
+
+      # Page: 2% of the 30-day budget burned in 1h.
+      - alert: ErrorBudgetBurnFast
+        expr: service:error_ratio:rate1h > (14.4 * 0.001) and service:error_ratio:rate5m > (14.4 * 0.001)
+        for: 2m
+        labels:
+          severity: page
+          window: 1h
+      # Page: 5% of the budget burned in 6h.
+      - alert: ErrorBudgetBurnFast
+        expr: service:error_ratio:rate6h > (6 * 0.001) and service:error_ratio:rate30m > (6 * 0.001)
+        for: 15m
+        labels:
+          severity: page
+          window: 6h
+      # Ticket: 10% of the budget burned in 1d.
+      - alert: ErrorBudgetBurnSlow
+        expr: service:error_ratio:rate1d > (3 * 0.001) and service:error_ratio:rate2h > (3 * 0.001)
+        for: 1h
+        labels:
+          severity: ticket
+          window: 1d

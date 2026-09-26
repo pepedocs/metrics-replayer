@@ -1,0 +1,3 @@
+{{- /* 100 req/s for the search service; errors/total = .Y */ -}}
+http_requests_total{service="search",code="500"} {{ counter "err" (mul 100 .Y) }}
+http_requests_total{service="search",code="200"} {{ counter "ok" (mul 100 (sub 1 .Y)) }}
