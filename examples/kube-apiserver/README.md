@@ -14,9 +14,20 @@ Open [localhost:9091](http://localhost:9091) and graph over the last 6h:
 ```promql
 histogram_quantile(0.99, sum by (le, verb) (rate(apiserver_request_duration_seconds_bucket{verb!="WATCH"}[5m])))
 histogram_quantile(0.5,  sum by (le, verb) (rate(apiserver_request_duration_seconds_bucket{verb!="WATCH"}[5m])))
+ALERTS{alertname="KubeAPIServerLatencyP99High"}
 ```
 
-<!-- Add a Prometheus graph screenshot here, e.g. ![p99 vs p50](snapshot.png) -->
+**p99 by verb.** The etcd compaction 3h ago lifts every verb to about 1.5s. The unpaginated LIST in the last 15 minutes lifts only LIST, to about 5s.
+
+![p99 latency by verb over 6h](img/p99.png)
+
+**p50 vs p99 for LIST.** On the same scale, p50 stays flat near zero (about 0.04s) through both incidents. Only the tail moves, so a median-based alert would see nothing.
+
+![p50 vs p99 latency for LIST over 6h](img/p50-vs-p99.png)
+
+**Firing alerts per verb, stacked.** This is backfilled alert history, with `for: 2m` applied: all four verbs fire during the compaction, and only LIST at the end. The short gap at the far right is where the backfilled history ends and Prometheus' own live evaluation starts its 2m `for` over.
+
+![KubeAPIServerLatencyP99High firing per verb over 6h](img/alerts.png)
 
 ## Traffic profile
 
@@ -32,6 +43,8 @@ The script backfills 6h of history, then pushes live every 2s.
 Series (verb / resource / requests per second): `GET pods` 40, `LIST pods` 8, `POST pods` 5, `PUT configmaps` 10, and `WATCH pods` 2. Every WATCH lasts 30–60s.
 
 ## Rule and alert
+
+From [`rules.yaml`](rules.yaml):
 
 ```yaml
 - record: cluster_quantile:apiserver_request_duration_seconds:histogram_quantile
@@ -50,11 +63,14 @@ Long-running requests are excluded: watches, `CONNECT`, and the `exec`/`attach`/
 
 ## What to expect
 
-- `KubeAPIServerLatencyP99High{verb="LIST", resource="pods"}` is **pending** right away and **firing** after ~2 minutes. No other verb alerts.
-- After the live tail ends (~4 min), the 5m rate window drains, and the alert resolves a few minutes later.
-- The etcd compaction 3h ago shows up in the graph but never alerts: rules only evaluate from the moment they are loaded, not over backfilled history.
+The rules are loaded with [rule backfill](../../docs/api.md#rule-backfill), so the full 6h of alert history appears right away, with `for: 2m` applied:
+
+- **3h ago, etcd compaction:** `KubeAPIServerLatencyP99High` fires for every verb (GET, LIST, POST, PUT) for roughly the length of the compaction, plus the time the 5m rate window takes to drain.
+- **Last 15 minutes, unpaginated LIST:** it fires for `verb="LIST", resource="pods"` only. The other verbs stay below 1s, and p50 stays flat throughout.
+- **Live:** Prometheus picks up from there. The LIST alert is pending right away and firing again after 2 minutes. About 4 minutes in, the tail ends, the 5m window drains, and the alert resolves a few minutes later.
 
 ## Files
 
-- `run.sh`: registers the `kube-apiserver` stream, submits the rule, and runs the profile.
-- `profile.awk`: generates the backfill (relative timestamps, sent with `?align=now`) and the live pushes. Edit `spec` for the series and `tick()` for the incidents.
+- `run.sh`: registers the `kube-apiserver` stream and runs the profile.
+- `profile.awk`: backfills 6h of metrics (relative timestamps, sent with `?align=now`), loads `rules.yaml` with `?backfill=6h`, then pushes live. Edit `spec` for the series and `tick()` for the incidents.
+- `rules.yaml`: the recording rule and alert.

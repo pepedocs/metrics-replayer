@@ -9,8 +9,11 @@ Describe how a system misbehaves, whether it's a bad deploy, a launch surge, a f
 Understanding alerts, before and after they matter:
 
 - **Find blind spots.** Which failures does this alert miss? A slow drift below the threshold, a flake that clears before `for` runs out, a surge the burn-rate windows smooth away.
+  *Try it:* in the [flaky dependency demo](docs/demo.md), a threshold alert never fires, while a fast-burn alert pages on every spike, 24 times in 6h.
 - **Plan and decide.** Try thresholds, windows and `for` durations against realistic profiles before an alert reaches production. Where an alert can't cover a failure, decide what the SRE team does instead.
+  *Try it:* the [flapping profile](docs/profiles.md#the-five-profiles) turns one dependency's flaps into one incident with `keep_firing_for`; delete that line from the rules and re-run to see the difference.
 - **Explain.** Show a reviewer, a teammate or a postmortem why an alert paged 24 times, or never.
+  *Try it:* the [kube-apiserver example](examples/kube-apiserver/README.md) shows a p99 alert firing on a long tail while p50 stays flat.
 
 Under the hood it's a small, fast tool. It simulates metric profiles (error rates, traffic, anything you can template), evaluates alerts instantly over backfilled history or live in real time, and leaves the evidence in Prometheus to look at.
 
@@ -34,6 +37,7 @@ Add `--realtime --window 30m` to watch it live instead, or `noise=0.25` to `--pa
 
 ## Documentation
 
+- [Demo](docs/demo.md): a flaky dependency, step by step, with graphs
 - [Profiles](docs/profiles.md): the built-in failure shapes and how to describe your own metrics
 - [API](docs/api.md): pushing, backfilling and loading rules directly with `curl`
 - [Configuration](docs/configuration.md): flags, Prometheus setup, troubleshooting
