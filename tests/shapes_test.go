@@ -117,3 +117,71 @@ func TestNewErrors(t *testing.T) {
 		t.Errorf("every=0 should fail")
 	}
 }
+
+func TestStepRiseFall(t *testing.T) {
+	s := mustNew(t, "step", "baseline=0,peak=1,start=-10m,duration=5m,rise=2m,fall=4m")
+	for _, tc := range []struct {
+		t    time.Duration
+		want float64
+	}{
+		{-11 * time.Minute, 0},
+		{-10 * time.Minute, 0},  // ramp starts
+		{-9 * time.Minute, 0.5}, // halfway up
+		{-8 * time.Minute, 1},   // fully rolled out
+		{-5 * time.Minute, 1},   // rollback starts
+		{-3 * time.Minute, 0.5}, // halfway down
+		{-1 * time.Minute, 0},   // drained
+	} {
+		if got := s(tc.t); !near(got, tc.want) {
+			t.Errorf("step(%s) = %v, want %v", tc.t, got, tc.want)
+		}
+	}
+}
+
+func TestNoise(t *testing.T) {
+	clean := mustNew(t, "constant", "baseline=0.3")
+	a := mustNew(t, "constant", "baseline=0.3,noise=0.25,seed=7")
+	a2 := mustNew(t, "constant", "baseline=0.3,noise=0.25,seed=7")
+	b := mustNew(t, "constant", "baseline=0.3,noise=0.25,seed=8")
+
+	same, differs, varies := true, false, false
+	for i := 0; i < 500; i++ {
+		ts := time.Duration(i-250) * 7 * time.Second
+		va := a(ts)
+		if va != a2(ts) {
+			same = false
+		}
+		if va != b(ts) {
+			differs = true
+		}
+		if !near(va, a(0)) {
+			varies = true
+		}
+		// Jitter stays within ±noise of the clean curve.
+		if va < 0.3*0.75-1e-9 || va > 0.3*1.25+1e-9 {
+			t.Fatalf("t=%s: %v outside ±25%% of 0.3", ts, va)
+		}
+		// Smooth: no jumps between samples 1s apart.
+		if d := a(ts+time.Second) - va; d > 0.05 || d < -0.05 {
+			t.Fatalf("t=%s: jump of %v in 1s", ts, d)
+		}
+	}
+	if !same {
+		t.Error("same seed should reproduce the same curve")
+	}
+	if !differs {
+		t.Error("different seeds should give different curves")
+	}
+	if !varies {
+		t.Error("noise should vary over time")
+	}
+	if clean(0) != 0.3 {
+		t.Error("noise=0 must leave the shape unchanged")
+	}
+	if _, err := shapes.New("step", "noise=0.1,noise_period=0s"); err == nil {
+		t.Error("noise_period=0 should fail")
+	}
+	if _, err := shapes.New("step", "noise=0.1,seed=abc"); err == nil {
+		t.Error("non-integer seed should fail")
+	}
+}

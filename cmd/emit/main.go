@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -43,10 +44,16 @@ func main() {
 		flag.Usage()
 		os.Exit(2)
 	}
+	// Noise is random per run unless a seed is given; log the seed so a run
+	// can be reproduced.
+	if hasParam(*params, "noise") && !hasParam(*params, "seed") {
+		*params = strings.TrimPrefix(*params+",seed="+strconv.FormatInt(rand.Int64N(1<<31), 10), ",")
+	}
 	shape, err := shapes.New(*shapeName, *params)
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Printf("shape=%s params=%q", *shapeName, *params)
 	e, err := newEmitter(*tmplPath, shape)
 	if err != nil {
 		log.Fatal(err)
@@ -243,4 +250,14 @@ func toFloat(v any) float64 {
 		return f
 	}
 	return 0
+}
+
+// hasParam reports whether "key=value,..." params set key.
+func hasParam(params, key string) bool {
+	for _, kv := range strings.Split(params, ",") {
+		if k, _, _ := strings.Cut(strings.TrimSpace(kv), "="); k == key {
+			return true
+		}
+	}
+	return false
 }

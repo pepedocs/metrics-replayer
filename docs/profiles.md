@@ -16,14 +16,18 @@
 
 Time `t` is relative to the end of the window: `start=-2h` means 2 hours before the window ends. Every parameter is optional. They're passed as `--params key=value,key=value`.
 
+Each parameter is explained in the [parameter reference](#parameter-reference) below.
+
 | Shape | Profile | Parameters (defaults) |
 |---|---|---|
-| `step` | **Bad deployment**: jumps to a plateau, drops back on rollback | `baseline=0.01`, `peak=0.3`, `start=-2h`, `duration=30m` (`0` means no rollback) |
+| `step` | **Bad deployment**: jumps to a plateau, drops back on rollback | `baseline=0.01`, `peak=0.3`, `start=-2h`, `duration=30m` (`0` means no rollback), `rise=0`, `fall=0` |
 | `launch` | **GA / big-bang launch**: log-normal surge that decays slowly | `baseline=0.01`, `peak=0.5`, `start=-3h`, `peak_at=20m`, `sigma=1` |
 | `spikes` | **Intermittent flake**: short, recurring spikes | `baseline=0`, `peak=1`, `every=1h`, `width=30s`, `offset=0` |
 | `drift` | **Slow poison**: `baseline + a * (elapsed/unit)^b` | `baseline=0.01`, `a=0.01`, `b=1`, `start=-24h`, `unit=1h` |
 | `flap` | **Flapping dependency**: `offset + amplitude * sin(2πt/period)`, floored at 0 | `offset=0.1`, `amplitude=0.1`, `period=10m` |
 | `constant` | Flat baseline | `baseline=0.01` |
+
+Every shape also takes `noise`, `seed` and `noise_period` to make it [realistic](#realistic-noise).
 
 ### Parameter reference
 
@@ -31,14 +35,16 @@ Durations use Go syntax (`30s`, `15m`, `2h`) and can be negative. Times like `st
 
 #### `step`: bad deployment
 
-`y = peak` from `start` for `duration`, otherwise `baseline`.
+`y = peak` from `start` for `duration`, otherwise `baseline`, with optional linear ramps on both edges.
 
 | Param | Default | Meaning |
 |---|---|---|
 | `baseline` | `0.01` | Value before the deploy and after the rollback |
 | `peak` | `0.3` | Value while the bad build is live |
 | `start` | `-2h` | When the deploy happens |
-| `duration` | `30m` | How long until the rollback. `0` means it never rolls back. |
+| `duration` | `30m` | How long until the rollback starts. `0` means it never rolls back. |
+| `rise` | `0` | How long the deploy takes to roll out: the value ramps from `baseline` to `peak` over this time. `0` is a vertical edge. |
+| `fall` | `0` | How long the rollback takes to drain, ramping from `peak` back to `baseline`, starting at `start + duration` |
 
 #### `launch`: GA / big-bang launch
 
@@ -96,18 +102,64 @@ To test alert flapping, put your threshold between `offset − amplitude` and `o
 |---|---|---|
 | `baseline` | `0.01` | The value, at all times |
 
+#### Realistic noise
+
+Real signals are never clean rectangles. These parameters work on every shape and add smooth, random jitter on top of the curve:
+
+`y_noisy = y · (1 + noise · n(t))`, where `n(t)` is smooth random noise between −1 and 1.
+
+| Param | Default | Meaning |
+|---|---|---|
+| `noise` | `0` (off) | Relative jitter. `0.25` lets the value wander ±25% around the curve: a 30% plateau moves between about 22% and 38%, and a 1% baseline between 0.75% and 1.25%. |
+| `seed` | random | Picks the random pattern. `emit` chooses a new one each run and logs it (`shape=step params="…,seed=626392463"`). Pass the same seed to reproduce a run exactly. |
+| `noise_period` | `30s` | How fast the noise changes. The curve drifts between new random points every `noise_period`, with finer jagged detail on top. Larger values are slower and smoother. |
+
+The noise depends only on time and the seed, so backfilled and live data join without a seam.
+
+```bash
+# A bad deploy that rolls out over 2m, a jagged plateau, and a rollback that drains over 5m
+--shape step --params peak=0.3,rise=2m,fall=5m,noise=0.25
+```
+
 To add a shape, write one function in [`internal/shapes/shapes.go`](../internal/shapes/shapes.go) and add it to the registry.
 
 ## Templates
 
 A template is a Go [text/template](https://pkg.go.dev/text/template) that renders one snapshot of metric lines. Don't add timestamps; `emit` does that.
 
-| In the template | Meaning |
-|---|---|
-| `.Y` | Shape value at this point |
-| `.T` | Seconds relative to the end of the window |
-| `counter "name" <per-second>` | Adds `per-second × tick length` to a running total and prints it. Counters keep increasing across backfill and live. Use each name once. |
-| `add`, `sub`, `mul`, `div` | Arithmetic, e.g. `mul 50 .Y` |
+### Values
+
+| Field | Type | Meaning |
+|---|---|---|
+| `.Y` | number | Shape value at this tick |
+| `.T` | number | Seconds relative to the end of the window: negative inside a backfilled window, positive after it |
+
+### Functions
+
+Functions use template call syntax: `func arg1 arg2`. Nest calls in parentheses: `mul 50 (sub 1 .Y)`.
+
+#### `counter NAME PER_SECOND`
+
+A monotonically increasing counter.
+
+| Param | Type | Meaning |
+|---|---|---|
+| `NAME` | string | Identifies the running total. Each distinct name is a separate counter. |
+| `PER_SECOND` | number | Rate for this tick. It's multiplied by the tick length (`--step` in backfill, the time since the last push in live), so rates stay consistent whatever the resolution. Negative values count as `0`. |
+
+It returns the new total, rounded to 3 decimals. Totals carry over from the backfill into live pushes, so the counter never resets. Call each `NAME` only once per template, because every call adds to the total.
+
+For example, `{{ counter "err" (mul 50 .Y) }}` counts errors at 50 requests per second times the error ratio `.Y`.
+
+#### `add`, `sub`, `mul`, `div` `A B [C ...]`
+
+Arithmetic on two or more numbers, applied left to right: `sub 1 .Y` is `1 − Y`, and `div 10 2 5` is `(10 / 2) / 5 = 1`.
+
+| Param | Type | Meaning |
+|---|---|---|
+| `A B ...` | numbers | Literals (`50`, `0.5`), `.Y`, `.T`, or the result of another function |
+
+The built-in text/template functions such as `printf` also work, e.g. `{{ printf "%.2f" .Y }}`.
 
 An error ratio (`errors / total = .Y`) at 50 requests per second, from [`error-ratio.tmpl`](../examples/profiles/error-ratio.tmpl):
 

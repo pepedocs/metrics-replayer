@@ -41,6 +41,9 @@ func Names() []string {
 
 // New builds the named shape from "key=value,key=value" parameters. Unknown
 // keys and malformed values are errors.
+//
+// Every shape also accepts noise parameters (see withNoise): noise, seed and
+// noise_period.
 func New(name, params string) (Shape, error) {
 	build, ok := registry[name]
 	if !ok {
@@ -50,7 +53,7 @@ func New(name, params string) (Shape, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := build(p)
+	s := withNoise(build(p), p)
 	if err := p.check(); err != nil {
 		return nil, fmt.Errorf("shape %s: %w", name, err)
 	}
@@ -83,17 +86,33 @@ func launch(p *Params) Shape {
 }
 
 // step: a bad deployment. Jumps from baseline to peak at start and stays
-// there for duration (0 means no rollback).
+// there for duration (0 means no rollback). rise and fall turn the vertical
+// edges into linear ramps: the deploy rolls out over rise, and the rollback
+// drains over fall, starting at start+duration.
 func step(p *Params) Shape {
 	baseline := p.Float("baseline", 0.01)
 	peak := p.Float("peak", 0.3)
 	start := p.Duration("start", -2*time.Hour)
 	duration := p.Duration("duration", 30*time.Minute)
+	rise := p.Duration("rise", 0)
+	fall := p.Duration("fall", 0)
+	ramp := func(from, to float64, elapsed, length time.Duration) float64 {
+		return from + (to-from)*float64(elapsed)/float64(length)
+	}
 	return func(t time.Duration) float64 {
-		if t >= start && (duration == 0 || t < start+duration) {
+		end := start + duration
+		switch {
+		case t < start:
+			return baseline
+		case t < start+rise:
+			return ramp(baseline, peak, t-start, rise)
+		case duration == 0 || t < end:
 			return peak
+		case t < end+fall:
+			return ramp(peak, baseline, t-end, fall)
+		default:
+			return baseline
 		}
-		return baseline
 	}
 }
 
@@ -151,6 +170,49 @@ func flap(p *Params) Shape {
 	}
 }
 
+// withNoise makes any shape realistic by scaling it with smooth random
+// jitter: y * (1 + noise * n(t)), where n(t) in [-1, 1] is value noise (random
+// points every noise_period, smoothly blended, plus a finer layer for jagged
+// detail). The result depends only on t and seed, so the same seed always
+// reproduces the same curve, and backfill and live join seamlessly.
+func withNoise(s Shape, p *Params) Shape {
+	noise := p.Float("noise", 0)
+	seed := p.Int("seed", 1)
+	period := p.Duration("noise_period", 30*time.Second)
+	if noise == 0 {
+		return s
+	}
+	if period <= 0 {
+		p.fail("noise_period must be positive")
+		return s
+	}
+	return func(t time.Duration) float64 {
+		n := 0.7*valueNoise(seed, t, period) + 0.3*valueNoise(seed+1, t, period/4)
+		return math.Max(0, s(t)*(1+noise*n))
+	}
+}
+
+// valueNoise returns a smooth pseudo-random value in [-1, 1]: random points at
+// multiples of period, blended with smoothstep.
+func valueNoise(seed int64, t, period time.Duration) float64 {
+	k := int64(math.Floor(float64(t) / float64(period)))
+	frac := float64(t-time.Duration(k)*period) / float64(period)
+	frac = frac * frac * (3 - 2*frac)
+	a, b := lattice(seed, k), lattice(seed, k+1)
+	return a + (b-a)*frac
+}
+
+// lattice hashes (seed, k) to a value in [-1, 1] (splitmix64).
+func lattice(seed, k int64) float64 {
+	x := uint64(seed)*0x9e3779b97f4a7c15 ^ uint64(k)
+	x ^= x >> 30
+	x *= 0xbf58476d1ce4e5b9
+	x ^= x >> 27
+	x *= 0x94d049bb133111eb
+	x ^= x >> 31
+	return float64(x>>11)/float64(1<<53)*2 - 1
+}
+
 // Params holds shape parameters and collects errors while they are read.
 type Params struct {
 	raw  map[string]string
@@ -186,6 +248,20 @@ func (p *Params) Float(key string, def float64) float64 {
 		p.fail(fmt.Sprintf("%s: %q is not a number", key, v))
 	}
 	return f
+}
+
+// Int returns the named integer parameter, or def if it is not set.
+func (p *Params) Int(key string, def int64) int64 {
+	p.used[key] = true
+	v, ok := p.raw[key]
+	if !ok {
+		return def
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		p.fail(fmt.Sprintf("%s: %q is not an integer", key, v))
+	}
+	return n
 }
 
 // Duration returns the named parameter (e.g. "-2h", "30m"), or def if unset.
