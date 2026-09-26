@@ -25,6 +25,77 @@ Time `t` is relative to the end of the window: `start=-2h` means 2 hours before 
 | `flap` | **Flapping dependency**: `offset + amplitude * sin(2πt/period)`, floored at 0 | `offset=0.1`, `amplitude=0.1`, `period=10m` |
 | `constant` | Flat baseline | `baseline=0.01` |
 
+### Parameter reference
+
+Durations use Go syntax (`30s`, `15m`, `2h`) and can be negative. Times like `start` are relative to the end of the window, so `-2h` means 2 hours before it ends. The value `y` is whatever your template makes of it; with `error-ratio.tmpl` it's the fraction of failing requests (`0.3` = 30%).
+
+#### `step`: bad deployment
+
+`y = peak` from `start` for `duration`, otherwise `baseline`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| `baseline` | `0.01` | Value before the deploy and after the rollback |
+| `peak` | `0.3` | Value while the bad build is live |
+| `start` | `-2h` | When the deploy happens |
+| `duration` | `30m` | How long until the rollback. `0` means it never rolls back. |
+
+#### `launch`: GA / big-bang launch
+
+A log-normal surge: it rises almost vertically, peaks, then decays slowly with a long tail. `y = baseline + (peak − baseline) · exp(−(ln x − ln peak_at)² / 2σ²)`, where `x` is the time since `start`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| `baseline` | `0.01` | Value before the launch, and what the tail decays towards |
+| `peak` | `0.5` | Highest value reached |
+| `start` | `-3h` | When the launch begins |
+| `peak_at` | `20m` | Time from `start` to the peak |
+| `sigma` | `1` | Width of the surge. Larger means a wider peak and a longer tail; smaller means a sharper spike that recovers quickly. |
+
+#### `spikes`: intermittent flake
+
+`y = peak` for `width` at the start of every `every` period, otherwise `baseline`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| `baseline` | `0` | Value between spikes |
+| `peak` | `1` | Value during a spike (`1` = every request fails) |
+| `every` | `1h` | Time between spike starts, e.g. an hourly cron job |
+| `width` | `30s` | How long each spike lasts. Keep it at or below the scrape/eval interval to mimic a single-sample blip. |
+| `offset` | `0` | Shifts all spikes in time, to line them up with something else |
+
+#### `drift`: slow poison
+
+`y = baseline + a · (elapsed / unit)^b` from `start`, otherwise `baseline`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| `baseline` | `0.01` | Value before the drift starts |
+| `a` | `0.01` | Growth per `unit` (with `b=1`, `y` grows by `a` every `unit`) |
+| `b` | `1` | Curvature. `1` is linear (disk filling at a steady rate); above `1` accelerates (a leak that gets worse). |
+| `start` | `-24h` | When the drift begins. It can be before the window, so the window opens mid-drift. |
+| `unit` | `1h` | Time unit for `a` |
+
+Example: `baseline=0.3,a=0.02,start=-12h` starts at 30% disk usage and adds 2 percentage points per hour.
+
+#### `flap`: flapping dependency
+
+`y = offset + amplitude · sin(2π t / period)`, floored at 0.
+
+| Param | Default | Meaning |
+|---|---|---|
+| `offset` | `0.1` | Center line of the wave |
+| `amplitude` | `0.1` | How far it swings above and below `offset` |
+| `period` | `10m` | Length of one fail-recover cycle |
+
+To test alert flapping, put your threshold between `offset − amplitude` and `offset + amplitude`. Where it sits decides how long each cycle spends above and below it. For example, with `offset=0.07,amplitude=0.05` and a 5% threshold, each 10m cycle spends about 6.3m above and 3.7m below.
+
+#### `constant`
+
+| Param | Default | Meaning |
+|---|---|---|
+| `baseline` | `0.01` | The value, at all times |
+
 To add a shape, write one function in [`internal/shapes/shapes.go`](../internal/shapes/shapes.go) and add it to the registry.
 
 ## Templates
