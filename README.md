@@ -35,14 +35,23 @@ This plays a bad deploy from 2h ago into 6h of history and evaluates the rules o
 
 Add `--realtime --window 30m` to watch it live instead, or `noise=0.25` to `--params` to make the curve realistically jagged.
 
+To test an alert systematically, describe a matrix of shapes in a scenario file and get the alert's profile: whether each must-fire case fires, how fast, and how often it flaps:
+
+```bash
+go run ./cmd/emit --scenario examples/kube-apiserver-slo/scenario.yaml --report
+```
+
+See the [kube-apiserver workflow](examples/kube-apiserver-slo/README.md) for the method behind it.
+
 ## Documentation
 
+- Workflow: [designing a kube-apiserver burn-rate alert](examples/kube-apiserver-slo/README.md), from intent to blind spots
 - Demos: [a flaky dependency](docs/demo.md), and [blind spots of burn-rate alerts](docs/demo-fast-burn.md) on realistic, jagged traffic
 - [Profiles](docs/profiles.md): the built-in failure shapes and how to describe your own metrics
 - [API](docs/api.md): pushing, backfilling and loading rules directly with `curl`
 - [Configuration](docs/configuration.md): flags, Prometheus setup, troubleshooting
 - [Known limitations and enhancements](docs/roadmap.md)
-- Examples: [profiles](examples/profiles), [fast-burn](examples/fast-burn), [api-latency](examples/api-latency), [kube-apiserver](examples/kube-apiserver/README.md)
+- Examples: [profiles](examples/profiles), [fast-burn](examples/fast-burn), [kube-apiserver-slo](examples/kube-apiserver-slo/README.md), [api-latency](examples/api-latency), [kube-apiserver](examples/kube-apiserver/README.md)
 
 ## Development
 

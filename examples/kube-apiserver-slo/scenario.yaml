@@ -1,0 +1,138 @@
+# Test matrix for the kube-apiserver burn-rate alerts (see README.md).
+# Every instance must fire its tier's alert. Durations scale with each tier's
+# long window L and short window S; burn rates with its threshold T.
+# Run: make clean && make up && ./examples/kube-apiserver-slo/run.sh
+window: 144h            # 6 days of traffic per instance
+step: 30s
+template: apiserver.tmpl
+rules: rules.yaml
+rules_backfill: 72h     # evaluate the last 3 days, so every 3d window is full
+instances:
+
+  # page-1h: L=60m S=5m T=14.4x
+  - name: page-1h-plateau-long
+    shape: step
+    params: baseline=0.002,peak=0.288,start=-4200m,duration=180m
+    alert: 'KubeAPIErrorBudgetBurn{long="1h",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: -4020m}
+  - name: page-1h-plateau-short
+    shape: step
+    params: baseline=0.002,peak=0.288,start=-4200m,duration=36m
+    alert: 'KubeAPIErrorBudgetBurn{long="1h",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: -4164m}
+  - name: page-1h-plateau-shorter
+    shape: step
+    params: baseline=0.002,peak=0.288,start=-4200m,duration=27m
+    alert: 'KubeAPIErrorBudgetBurn{long="1h",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: -4173m}
+  - name: page-1h-spikes-regular
+    shape: spikes
+    params: baseline=0.002,peak=0.432,every=20m,width=10m
+    alert: 'KubeAPIErrorBudgetBurn{long="1h",cluster="{{ .Name }}"}'
+    incident: {start: -72h}
+  - name: page-1h-spikes-uneven
+    shape: step
+    params: baseline=0.002,peak=0.1872,start=-4200m,duration=180m,noise=0.5,noise_period=2m,seed=7
+    alert: 'KubeAPIErrorBudgetBurn{long="1h",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: -4020m}
+  - name: page-1h-spikes-degrading
+    shape: drift
+    params: baseline=0.072,a=0.36,b=1,start=-120m,unit=60m,noise=0.5,noise_period=2m,seed=9
+    alert: 'KubeAPIErrorBudgetBurn{long="1h",cluster="{{ .Name }}"}'
+    incident: {start: -120m}
+
+  # page-6h: L=360m S=30m T=6x
+  - name: page-6h-plateau-long
+    shape: step
+    params: baseline=0.002,peak=0.12,start=-4200m,duration=1080m
+    alert: 'KubeAPIErrorBudgetBurn{long="6h",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: -3120m}
+  - name: page-6h-plateau-short
+    shape: step
+    params: baseline=0.002,peak=0.12,start=-4200m,duration=216m
+    alert: 'KubeAPIErrorBudgetBurn{long="6h",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: -3984m}
+  - name: page-6h-plateau-shorter
+    shape: step
+    params: baseline=0.002,peak=0.12,start=-4200m,duration=162m
+    alert: 'KubeAPIErrorBudgetBurn{long="6h",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: -4038m}
+  - name: page-6h-spikes-regular
+    shape: spikes
+    params: baseline=0.002,peak=0.18,every=120m,width=60m
+    alert: 'KubeAPIErrorBudgetBurn{long="6h",cluster="{{ .Name }}"}'
+    incident: {start: -72h}
+  - name: page-6h-spikes-uneven
+    shape: step
+    params: baseline=0.002,peak=0.078,start=-4200m,duration=1080m,noise=0.5,noise_period=15m,seed=7
+    alert: 'KubeAPIErrorBudgetBurn{long="6h",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: -3120m}
+  - name: page-6h-spikes-degrading
+    shape: drift
+    params: baseline=0.03,a=0.15,b=1,start=-720m,unit=360m,noise=0.5,noise_period=15m,seed=9
+    alert: 'KubeAPIErrorBudgetBurn{long="6h",cluster="{{ .Name }}"}'
+    incident: {start: -720m}
+
+  # ticket-1d: L=1440m S=120m T=3x
+  - name: ticket-1d-plateau-long
+    shape: step
+    params: baseline=0.002,peak=0.06,start=-4200m,duration=4200m
+    alert: 'KubeAPIErrorBudgetBurn{long="1d",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: 0m}
+  - name: ticket-1d-plateau-short
+    shape: step
+    params: baseline=0.002,peak=0.06,start=-4200m,duration=864m
+    alert: 'KubeAPIErrorBudgetBurn{long="1d",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: -3336m}
+  - name: ticket-1d-plateau-shorter
+    shape: step
+    params: baseline=0.002,peak=0.06,start=-4200m,duration=648m
+    alert: 'KubeAPIErrorBudgetBurn{long="1d",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: -3552m}
+  - name: ticket-1d-spikes-regular
+    shape: spikes
+    params: baseline=0.002,peak=0.09,every=480m,width=240m
+    alert: 'KubeAPIErrorBudgetBurn{long="1d",cluster="{{ .Name }}"}'
+    incident: {start: -72h}
+  - name: ticket-1d-spikes-uneven
+    shape: step
+    params: baseline=0.002,peak=0.039,start=-4200m,duration=4200m,noise=0.5,noise_period=60m,seed=7
+    alert: 'KubeAPIErrorBudgetBurn{long="1d",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: 0m}
+  - name: ticket-1d-spikes-degrading
+    shape: drift
+    params: baseline=0.015,a=0.075,b=1,start=-2880m,unit=1440m,noise=0.5,noise_period=60m,seed=9
+    alert: 'KubeAPIErrorBudgetBurn{long="1d",cluster="{{ .Name }}"}'
+    incident: {start: -2880m}
+
+  # ticket-3d: L=4320m S=360m T=1x
+  - name: ticket-3d-plateau-long
+    shape: step
+    params: baseline=0.002,peak=0.02,start=-4200m,duration=4200m
+    alert: 'KubeAPIErrorBudgetBurn{long="3d",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: 0m}
+  - name: ticket-3d-plateau-short
+    shape: step
+    params: baseline=0.002,peak=0.02,start=-4200m,duration=2592m
+    alert: 'KubeAPIErrorBudgetBurn{long="3d",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: -1608m}
+  - name: ticket-3d-plateau-shorter
+    shape: step
+    params: baseline=0.002,peak=0.02,start=-4200m,duration=1944m
+    alert: 'KubeAPIErrorBudgetBurn{long="3d",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: -2256m}
+  - name: ticket-3d-spikes-regular
+    shape: spikes
+    params: baseline=0.002,peak=0.03,every=1440m,width=720m
+    alert: 'KubeAPIErrorBudgetBurn{long="3d",cluster="{{ .Name }}"}'
+    incident: {start: -72h}
+  - name: ticket-3d-spikes-uneven
+    shape: step
+    params: baseline=0.002,peak=0.013,start=-4200m,duration=4200m,noise=0.5,noise_period=180m,seed=7
+    alert: 'KubeAPIErrorBudgetBurn{long="3d",cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: 0m}
+  - name: ticket-3d-spikes-degrading
+    shape: drift
+    params: baseline=0.005,a=0.025,b=1,start=-4200m,unit=4320m,noise=0.5,noise_period=180m,seed=9
+    alert: 'KubeAPIErrorBudgetBurn{long="3d",cluster="{{ .Name }}"}'
+    incident: {start: -4200m}

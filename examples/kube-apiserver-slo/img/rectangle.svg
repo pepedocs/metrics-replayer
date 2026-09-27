@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 380" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="14">
+  <rect width="820" height="380" fill="#ffffff"/>
+
+  <!-- below the threshold: ignored -->
+  <rect x="60" y="190" width="720" height="130" fill="#f1f3f5"/>
+  <text x="420" y="300" text-anchor="middle" fill="#868e96">below the threshold: the alert doesn't care</text>
+
+  <!-- axes -->
+  <line x1="60" y1="320" x2="785" y2="320" stroke="#343a40" stroke-width="1.5"/>
+  <line x1="60" y1="320" x2="60" y2="30" stroke="#343a40" stroke-width="1.5"/>
+  <text x="785" y="342" text-anchor="end" fill="#343a40">time</text>
+  <text x="50" y="40" text-anchor="end" fill="#343a40">value</text>
+
+  <!-- threshold -->
+  <line x1="60" y1="190" x2="780" y2="190" stroke="#c92a2a" stroke-width="2"/>
+  <text x="66" y="182" fill="#c92a2a" font-weight="600">threshold</text>
+
+  <!-- attempt 1: drops out before `for` -->
+  <line x1="191" y1="190" x2="191" y2="50" stroke="#e8590c" stroke-width="2" stroke-dasharray="6 4"/>
+  <line x1="191" y1="190" x2="318" y2="190" stroke="#e8590c" stroke-width="3"/>
+  <line x1="318" y1="190" x2="318" y2="50" stroke="#e8590c" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="254" y="68" text-anchor="middle" fill="#e8590c" font-weight="600">drops out</text>
+  <text x="254" y="86" text-anchor="middle" fill="#e8590c">before `for`: starts over</text>
+
+  <!-- attempt 2: stays inside for the whole width, fires -->
+  <rect x="352" y="50" width="220" height="140" fill="#2b8a3e" fill-opacity="0.08"/>
+  <line x1="352" y1="190" x2="352" y2="50" stroke="#2b8a3e" stroke-width="2" stroke-dasharray="6 4"/>
+  <line x1="352" y1="190" x2="572" y2="190" stroke="#2b8a3e" stroke-width="3"/>
+  <line x1="572" y1="190" x2="572" y2="50" stroke="#2b8a3e" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="462" y="68" text-anchor="middle" fill="#2b8a3e" font-weight="600">stays inside for the whole width</text>
+  <text x="462" y="86" text-anchor="middle" fill="#2b8a3e">top is open: height doesn't matter</text>
+  <text x="462" y="178" text-anchor="middle" fill="#2b8a3e" font-weight="700" font-size="16">the problem space</text>
+
+  <!-- width = for -->
+  <line x1="356" y1="212" x2="568" y2="212" stroke="#2b8a3e" stroke-width="1.5"/>
+  <polyline points="364,207 356,212 364,217" fill="none" stroke="#2b8a3e" stroke-width="1.5"/>
+  <polyline points="560,207 568,212 560,217" fill="none" stroke="#2b8a3e" stroke-width="1.5"/>
+  <text x="462" y="232" text-anchor="middle" fill="#2b8a3e" font-weight="600">width = `for`</text>
+
+  <!-- the shape -->
+  <path d="M60,285 L150,285 C175,285 185,150 208,140 C235,125 250,110 275,130 C295,145 305,180 318,190 C326,198 336,200 344,196 C348,194 350,192 352,190 C370,160 390,120 420,115 C450,110 470,150 500,135 C530,120 555,100 572,125 C590,150 610,110 640,120 C660,127 675,250 700,285 L780,285" fill="none" stroke="#1971c2" stroke-width="3"/>
+  <text x="120" y="275" fill="#1971c2" font-weight="600">shape</text>
+
+  <!-- fires marker -->
+  <circle cx="572" cy="125" r="7" fill="#2b8a3e"/>
+  <text x="584" y="112" fill="#2b8a3e" font-weight="700">fires</text>
+</svg>

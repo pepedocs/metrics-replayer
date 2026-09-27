@@ -38,7 +38,19 @@ func main() {
 	interval := flag.Duration("interval", 2*time.Second, "live push interval")
 	rulesPath := flag.String("rules", "", "rule file to load; in backfill mode it is also evaluated over the window")
 	dryRun := flag.Bool("dry-run", false, "print the window as backfill data instead of sending anything, then exit")
+	scenarioPath := flag.String("scenario", "", "scenario file: replay every instance in it and load its rules")
+	report := flag.Bool("report", false, "with --scenario: print how the alerts performed on each instance")
+	reportOnly := flag.Bool("report-only", false, "with --scenario: report on an earlier run without replaying")
+	prometheusURL := flag.String("prometheus", "http://localhost:9091", "Prometheus base URL, for --report")
+	markdown := flag.Bool("markdown", false, "print the report as a Markdown table")
 	flag.Parse()
+
+	if *scenarioPath != "" {
+		if err := runScenario(*scenarioPath, *replayerURL, *prometheusURL, !*reportOnly, *report || *reportOnly, *markdown); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	if *shapeName == "" || *tmplPath == "" || *window <= 0 {
 		flag.Usage()
@@ -54,7 +66,7 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Printf("shape=%s params=%q", *shapeName, *params)
-	e, err := newEmitter(*tmplPath, shape)
+	e, err := newEmitter(*tmplPath, shape, "")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -142,6 +154,7 @@ func loadRules(replayerURL, path, query string) error {
 // emitter renders the template once per tick, keeping counter state between
 // ticks so counters never reset across backfill and live.
 type emitter struct {
+	name     string // exposed to templates as .Name
 	tmpl     *template.Template
 	shape    shapes.Shape
 	counters map[string]float64
@@ -150,8 +163,9 @@ type emitter struct {
 
 // data is what the template sees.
 type data struct {
-	Y value // shape value at this tick
-	T value // seconds relative to now (negative during backfill)
+	Y    value  // shape value at this tick
+	T    value  // seconds relative to now (negative during backfill)
+	Name string // scenario instance name (empty outside --scenario)
 }
 
 // value prints without float noise (0.21, not 0.21000000000000002).
@@ -161,8 +175,8 @@ func (v value) String() string {
 	return strconv.FormatFloat(math.Round(float64(v)*1e9)/1e9, 'f', -1, 64)
 }
 
-func newEmitter(path string, shape shapes.Shape) (*emitter, error) {
-	e := &emitter{shape: shape, counters: map[string]float64{}}
+func newEmitter(path string, shape shapes.Shape, name string) (*emitter, error) {
+	e := &emitter{name: name, shape: shape, counters: map[string]float64{}}
 	tmpl, err := template.New(filepath.Base(path)).Funcs(template.FuncMap{
 		"counter": e.counter,
 		"add":     func(v ...any) float64 { return fold(v, func(a, b float64) float64 { return a + b }) },
@@ -190,7 +204,7 @@ func (e *emitter) counter(name string, perSecond any) string {
 func (e *emitter) render(w io.Writer, t, dt time.Duration, ts time.Time) error {
 	e.dt = dt
 	var buf bytes.Buffer
-	if err := e.tmpl.Execute(&buf, data{Y: value(e.shape(t)), T: value(t.Seconds())}); err != nil {
+	if err := e.tmpl.Execute(&buf, data{Y: value(e.shape(t)), T: value(t.Seconds()), Name: e.name}); err != nil {
 		return err
 	}
 	for _, line := range strings.Split(buf.String(), "\n") {

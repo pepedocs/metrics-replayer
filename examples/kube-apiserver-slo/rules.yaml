@@ -1,0 +1,99 @@
+# Burn-rate alerts for a kube-apiserver availability SLO, following the Google
+# SRE workbook's multi-window, multi-burn-rate convention.
+#
+# SLO: 99% of requests are good over 30 days (error budget: 1%).
+# Bad request: a 5xx error, or a successful request slower than 1s.
+#
+# Tier    Windows    Burn    Budget spent before it fires   for
+# page    1h / 5m    14.4x   2% in 1h                       2m
+# page    6h / 30m   6x      5% in 6h                       15m
+# ticket  1d / 2h    3x      10% in 1d                      1h
+# ticket  3d / 6h    1x      10% in 3d                      3h
+groups:
+  - name: kube-apiserver-slo
+    rules:
+      - record: apiserver_request:burnrate5m
+        expr: |
+          (
+            sum by (cluster) (rate(apiserver_request_total{code=~"5.."}[5m]))
+            + sum by (cluster) (rate(apiserver_request_sli_duration_seconds_count[5m]))
+            - sum by (cluster) (rate(apiserver_request_sli_duration_seconds_bucket{le="1"}[5m]))
+          )
+          / sum by (cluster) (rate(apiserver_request_total[5m]))
+      - record: apiserver_request:burnrate30m
+        expr: |
+          (
+            sum by (cluster) (rate(apiserver_request_total{code=~"5.."}[30m]))
+            + sum by (cluster) (rate(apiserver_request_sli_duration_seconds_count[30m]))
+            - sum by (cluster) (rate(apiserver_request_sli_duration_seconds_bucket{le="1"}[30m]))
+          )
+          / sum by (cluster) (rate(apiserver_request_total[30m]))
+      - record: apiserver_request:burnrate1h
+        expr: |
+          (
+            sum by (cluster) (rate(apiserver_request_total{code=~"5.."}[1h]))
+            + sum by (cluster) (rate(apiserver_request_sli_duration_seconds_count[1h]))
+            - sum by (cluster) (rate(apiserver_request_sli_duration_seconds_bucket{le="1"}[1h]))
+          )
+          / sum by (cluster) (rate(apiserver_request_total[1h]))
+      - record: apiserver_request:burnrate2h
+        expr: |
+          (
+            sum by (cluster) (rate(apiserver_request_total{code=~"5.."}[2h]))
+            + sum by (cluster) (rate(apiserver_request_sli_duration_seconds_count[2h]))
+            - sum by (cluster) (rate(apiserver_request_sli_duration_seconds_bucket{le="1"}[2h]))
+          )
+          / sum by (cluster) (rate(apiserver_request_total[2h]))
+      - record: apiserver_request:burnrate6h
+        expr: |
+          (
+            sum by (cluster) (rate(apiserver_request_total{code=~"5.."}[6h]))
+            + sum by (cluster) (rate(apiserver_request_sli_duration_seconds_count[6h]))
+            - sum by (cluster) (rate(apiserver_request_sli_duration_seconds_bucket{le="1"}[6h]))
+          )
+          / sum by (cluster) (rate(apiserver_request_total[6h]))
+      - record: apiserver_request:burnrate1d
+        expr: |
+          (
+            sum by (cluster) (rate(apiserver_request_total{code=~"5.."}[1d]))
+            + sum by (cluster) (rate(apiserver_request_sli_duration_seconds_count[1d]))
+            - sum by (cluster) (rate(apiserver_request_sli_duration_seconds_bucket{le="1"}[1d]))
+          )
+          / sum by (cluster) (rate(apiserver_request_total[1d]))
+      - record: apiserver_request:burnrate3d
+        expr: |
+          (
+            sum by (cluster) (rate(apiserver_request_total{code=~"5.."}[3d]))
+            + sum by (cluster) (rate(apiserver_request_sli_duration_seconds_count[3d]))
+            - sum by (cluster) (rate(apiserver_request_sli_duration_seconds_bucket{le="1"}[3d]))
+          )
+          / sum by (cluster) (rate(apiserver_request_total[3d]))
+
+      - alert: KubeAPIErrorBudgetBurn
+        expr: apiserver_request:burnrate1h > (14.4 * 0.01) and apiserver_request:burnrate5m > (14.4 * 0.01)
+        for: 2m
+        labels:
+          severity: critical
+          long: 1h
+          short: 5m
+      - alert: KubeAPIErrorBudgetBurn
+        expr: apiserver_request:burnrate6h > (6 * 0.01) and apiserver_request:burnrate30m > (6 * 0.01)
+        for: 15m
+        labels:
+          severity: critical
+          long: 6h
+          short: 30m
+      - alert: KubeAPIErrorBudgetBurn
+        expr: apiserver_request:burnrate1d > (3 * 0.01) and apiserver_request:burnrate2h > (3 * 0.01)
+        for: 1h
+        labels:
+          severity: warning
+          long: 1d
+          short: 2h
+      - alert: KubeAPIErrorBudgetBurn
+        expr: apiserver_request:burnrate3d > (1 * 0.01) and apiserver_request:burnrate6h > (1 * 0.01)
+        for: 3h
+        labels:
+          severity: warning
+          long: 3d
+          short: 6h

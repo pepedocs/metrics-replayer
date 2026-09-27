@@ -1,0 +1,11 @@
+{{- /*
+  kube-apiserver traffic for one cluster: 200 req/s, of which a fraction .Y is
+  "bad". Half of the bad requests fail (5xx), half succeed but are slower than
+  1s. So errors + slow = 200 * .Y and the bad ratio is exactly .Y.
+  .Name is the scenario instance name.
+*/ -}}
+apiserver_request_total{cluster="{{ .Name }}",code="500"} {{ counter "err" (mul 100 .Y) }}
+apiserver_request_total{cluster="{{ .Name }}",code="200"} {{ counter "ok" (mul 200 (sub 1 (div .Y 2))) }}
+apiserver_request_sli_duration_seconds_count{cluster="{{ .Name }}"} {{ counter "count" (mul 200 (sub 1 (div .Y 2))) }}
+apiserver_request_sli_duration_seconds_bucket{cluster="{{ .Name }}",le="1"} {{ counter "fast" (mul 200 (sub 1 .Y)) }}
+apiserver_request_sli_duration_seconds_bucket{cluster="{{ .Name }}",le="+Inf"} {{ counter "inf" (mul 200 (sub 1 (div .Y 2))) }}

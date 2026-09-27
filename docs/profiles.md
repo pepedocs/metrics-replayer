@@ -216,3 +216,29 @@ go run ./cmd/emit --shape step \
   --template examples/profiles/error-ratio.tmpl \
   --rules examples/profiles/rules.yaml
 ```
+
+## Scenarios and reports
+
+A scenario file replays many instances in one run, loads a rule file with rule backfill, and reports how the alert performed on each instance. Templates get the instance name as `{{ .Name }}`, so one template serves every instance.
+
+```yaml
+window: 144h          # history backfilled per instance
+step: 30s
+template: my.tmpl     # default template; an instance can override it
+rules: rules.yaml
+rules_backfill: 72h   # how far back the rules are evaluated
+instances:
+  - name: short-outage
+    shape: step
+    params: peak=0.3,start=-70h,duration=30m
+    alert: 'MyAlert{severity="page",cluster="{{ .Name }}"}'   # the alert that must fire
+    incident: {start: -70h, end: -69h30m}                     # omit end if it's ongoing
+```
+
+```bash
+go run ./cmd/emit --scenario scenario.yaml --report [--markdown]
+go run ./cmd/emit --scenario scenario.yaml --report-only   # report on the last run again
+```
+
+The report lists, for each instance: whether the alert fired, the time from the incident's start to the first firing, the number of separate firings (more than one means flapping), and any firing after the incident ended. See [`examples/kube-apiserver-slo`](../examples/kube-apiserver-slo/README.md) for a full test matrix.
+

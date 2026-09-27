@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -176,5 +177,70 @@ func TestEmitLogsRandomSeedForNoise(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "seed=") {
 		t.Errorf("noise without a seed should log the chosen seed:\n%s", out)
+	}
+}
+
+// fakeProm serves query_range for ALERTS with two firing runs relative to the
+// query's end: 50m..40m before it, and 20m..15m before it.
+func fakeProm(t *testing.T, gotQuery *string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		req.ParseForm()
+		*gotQuery = req.Form.Get("query")
+		end, _ := strconv.ParseFloat(req.Form.Get("end"), 64)
+		var vals []string
+		for _, r := range [][2]float64{{50, 40}, {20, 15}} {
+			for m := r[0]; m >= r[1]; m -= 0.5 {
+				vals = append(vals, fmt.Sprintf(`[%f,"1"]`, end-m*60))
+			}
+		}
+		fmt.Fprintf(w, `{"status":"success","data":{"resultType":"matrix","result":[{"metric":{},"values":[%s]}]}}`, strings.Join(vals, ","))
+	}))
+}
+
+func TestEmitScenarioReport(t *testing.T) {
+	bin := buildEmit(t)
+	rep := &fakeReplayer{pushes: make(chan string, 1)}
+	rsrv := httptest.NewServer(rep)
+	defer rsrv.Close()
+	var query string
+	psrv := fakeProm(t, &query)
+	defer psrv.Close()
+
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "t.tmpl"), []byte(`x{name="{{ .Name }}"} {{ .Y }}`+"\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "scenario.yaml"), []byte(`window: 2h
+step: 30s
+template: t.tmpl
+rules_backfill: 2h
+instances:
+  - name: inc-a
+    shape: constant
+    alert: 'MyAlert{severity="page",name="{{ .Name }}"}'
+    incident: {start: -1h, end: -30m}
+`), 0o644)
+
+	out, err := exec.Command(bin, "--replayer", rsrv.URL, "--prometheus", psrv.URL,
+		"--scenario", filepath.Join(dir, "scenario.yaml"), "--report", "--markdown").CombinedOutput()
+	if err != nil {
+		t.Fatalf("emit: %v\n%s", err, out)
+	}
+	if len(rep.backfills) != 1 || !strings.Contains(rep.backfills[0], `x{name="inc-a"}`) {
+		t.Errorf("backfill should render .Name: %.80q", rep.backfills)
+	}
+	if want := `ALERTS{alertname="MyAlert",alertstate="firing",severity="page",name="inc-a"}`; query != want {
+		t.Errorf("query = %s, want %s", query, want)
+	}
+	// Incident from -60m to -30m; firing runs start at -50m and -20m.
+	if !strings.Contains(string(out), "| inc-a | 30m | yes | 10m | 2 | 10m after it ended |") {
+		t.Errorf("unexpected report:\n%s", out)
+	}
+
+	// --report-only reuses the recorded run without replaying.
+	rep.backfills = nil
+	out, err = exec.Command(bin, "--prometheus", psrv.URL,
+		"--scenario", filepath.Join(dir, "scenario.yaml"), "--report-only").CombinedOutput()
+	if err != nil || len(rep.backfills) != 0 || !strings.Contains(string(out), "inc-a") {
+		t.Errorf("report-only: err=%v backfills=%d\n%s", err, len(rep.backfills), out)
 	}
 }
