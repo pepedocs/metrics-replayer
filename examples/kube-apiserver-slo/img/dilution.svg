@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 470" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="14">
+  <rect width="880" height="470" fill="#ffffff"/>
+  <text x="30" y="30" font-weight="700" font-size="16" fill="#212529">page-1h: one client with 1% of the traffic is completely down</text>
+
+  <!-- log scale: y = 330 - 80*log10(burn / 0.2) ; 0.2x=330, 1x=274, 14.4x=181, 100x=114 -->
+  <rect x="260" y="55" width="420" height="285" fill="#fff4e6"/>
+  <text x="470" y="72" text-anchor="middle" fill="#e8590c" font-weight="600">the client's outage (3h)</text>
+
+  <!-- axes and log ticks -->
+  <line x1="90" y1="340" x2="850" y2="340" stroke="#343a40" stroke-width="1.5"/>
+  <line x1="90" y1="340" x2="90" y2="55" stroke="#343a40" stroke-width="1.5"/>
+  <text x="850" y="362" text-anchor="end" fill="#343a40">time</text>
+  <text x="80" y="60" text-anchor="end" fill="#343a40">burn</text>
+  <text x="80" y="118" text-anchor="end" fill="#868e96">100×</text>
+  <text x="80" y="278" text-anchor="end" fill="#868e96">1×</text>
+  <text x="80" y="334" text-anchor="end" fill="#868e96">0.2×</text>
+  <line x1="90" y1="274" x2="850" y2="274" stroke="#e9ecef"/>
+  <line x1="90" y1="114" x2="850" y2="114" stroke="#e9ecef"/>
+  <text x="90" y="380" fill="#868e96" font-size="12">vertical axis is logarithmic, so 1×, 14.4× and 100× all fit</text>
+
+  <!-- threshold -->
+  <line x1="90" y1="181" x2="850" y2="181" stroke="#c92a2a" stroke-width="2"/>
+  <text x="96" y="173" fill="#c92a2a" font-weight="600">page threshold 14.4×</text>
+
+  <!-- (1) the client's own burn -->
+  <polyline points="90,330 260,330 262,114 680,114 682,330 850,330" fill="none" stroke="#1971c2" stroke-width="3"/>
+  <text x="270" y="106" fill="#1971c2" font-weight="600">(1) the client's own burn: 100×</text>
+
+  <!-- (2) short window (5m) over all traffic: jumps within minutes to ~1.2x -->
+  <polyline points="90,330 260,330 272,268 680,268 692,330 850,330" fill="none" stroke="#e8590c" stroke-width="3"/>
+  <text x="290" y="258" fill="#e8590c" font-weight="600">(2) short window (5m), all traffic: 1×</text>
+
+  <!-- (3) long window (1h) over all traffic: ramps over an hour to ~1.2x -->
+  <polyline points="90,330 260,330 400,268 680,268 820,330 850,330" fill="none" stroke="#2b8a3e" stroke-width="3"/>
+  <text x="410" y="298" fill="#2b8a3e" font-weight="600">(3) long window (1h), all traffic: 1×</text>
+
+  <!-- gap arrow -->
+  <line x1="740" y1="183" x2="740" y2="266" stroke="#495057" stroke-width="1.5"/>
+  <polyline points="735,191 740,183 745,191" fill="none" stroke="#495057" stroke-width="1.5"/>
+  <polyline points="735,258 740,266 745,258" fill="none" stroke="#495057" stroke-width="1.5"/>
+  <text x="748" y="220" fill="#495057">14× short</text>
+  <text x="748" y="238" fill="#495057">of the line</text>
+
+  <!-- (4) alert -->
+  <text x="30" y="420" fill="#212529"><tspan font-weight="700">(4) alert: never fires.</tspan> Both windows see 1% of traffic × 100% errors ÷ 1% budget = 1×, far below 14.4×.</text>
+  <text x="30" y="442" fill="#212529">The alert needs long window AND short window above the threshold; neither ever is.</text>
+</svg>

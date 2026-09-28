@@ -131,13 +131,17 @@ What the profile says:
 | The alert flaps on uneven spikes | page-1h, page-6h, ticket-1d | `keep_firing_for` to bridge short dips |
 | The alert fires after the incident ended | ticket-3d | Accept it for a ticket, or shorten `for` |
 
-> **Note: a blind spot this matrix doesn't cover.** All instances above vary the shape over *time*. A second kind of averaging happens across *traffic*: the SLO is computed over all requests together, so a problem that only hits part of the traffic, such as one important customer, is diluted:
+> **Note: a blind spot this matrix doesn't cover.** All instances above vary the shape over *time*. A second kind of averaging happens across *traffic*: the SLO is computed over all requests together, so a problem that only hits part of the traffic, such as one important client, is diluted:
 >
 > ```
 > burn the alert sees = share of traffic × error rate of that share ÷ error budget
 > ```
 >
-> A customer with 1% of the traffic who is completely down shows up as 1% × 100% ÷ 1% = **1×** under this 99% SLO: far below the 14.4× and 6× pages, and at best a 3d ticket after days. The short windows don't help. A steady outage looks the same diluted 1× in every window, and the AND needs both windows above the threshold. This follows from the model; it hasn't been replayed in this matrix yet. The usual remedy is to segment: SLOs or burn-rate alerts per customer (or per critical path), so each one is measured against its own traffic.
+> A client with 1% of the traffic who is completely down shows up as 1% × 100% ÷ 1% = **1×** under this 99% SLO: far below the 14.4× and 6× pages, and at best a 3d ticket after days. Each tier's own window pair (1h/5m, 6h/30m, 1d/2h, 3d/6h) doesn't help either. In the diagram, the client's own burn **(1)** is 100×, but both windows of page-1h, the 5m short window **(2)** and the 1h long window **(3)**, see only the diluted 1×. The alert needs long AND short above the threshold, so it **(4)** never fires. The same happens on page-6h and ticket-1d. Only ticket-3d, whose threshold is 1×, can eventually catch it, days later.
+>
+> ![page-1h: a client with 1% of the traffic is completely down, but both windows see only 1x](img/dilution.svg)
+>
+> This follows from the model; it hasn't been replayed in this matrix yet. The usual remedy is to segment: SLOs or burn-rate alerts per client (or per critical path), so each one is measured against its own traffic.
 
 After a change, re-run the same scenario (`make clean && make up` first) and compare the reports.
 
