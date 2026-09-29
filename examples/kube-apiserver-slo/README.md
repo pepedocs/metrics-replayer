@@ -32,7 +32,7 @@ fire at t    if condition has held for the whole `for` duration
 
 **Step 2: the problem space.** Picture a shape as the Prometheus console draws it: time left to right, value (here, the burn rate) going up, never below zero. The problem space is every line that could be drawn there, which is endless, so we narrow it down.
 
-**Step 3: narrow it to a rectangle.** The alert only checks whether the value is **above the threshold**, so everything below it can be ignored, and above it, **height doesn't matter**. It has a **limited memory**: it takes the whole shape, but each decision depends only on what its window currently covers. And it fires only once the condition has held for **`for`**, so above the threshold only time counts. That leaves a **rectangle**: bottom edge = threshold, width = `for`, open top. With two windows, each has its own rectangle, and the alert needs both (AND).
+**Step 3: narrow it to a rectangle.** Note that the shape here is **what the alert sees**, not the incident itself: the signal after the alert's windows have averaged it over time and its SLI has summed it over all traffic. The alert only checks whether that value is **above the threshold**, so everything below it can be ignored, and above it, **height doesn't matter**. It has a **limited memory**: it takes the whole shape, but each decision depends only on what its window currently covers. And it fires only once the condition has held for **`for`**, so above the threshold only time counts. That leaves a **rectangle**: bottom edge = threshold, width = `for`, open top. With two windows, each has its own rectangle, and the alert needs both (AND).
 
 ![The rectangle: bottom edge is the threshold, width is `for`, top is open](img/rectangle.svg)
 
@@ -40,7 +40,7 @@ Both rectangles in the drawing are the same one at two moments: in orange, the s
 
 Besides the problem space, this narrows down two more things:
 
-1. **What to test.** Shapes outside the rectangle can't make the alert fire, so they aren't important and don't need tests.
+1. **What to test.** What the alert sees outside the rectangle can't make it fire, so we don't need to explore those shapes. We test the incidents the alert is meant to catch, and check whether what the alert sees lands inside.
 2. **How to group what's inside.** The shapes in the rectangle can be grouped in three ways: by **shape class**, by **cause of incident**, and by **how likely each shape is**. We'll get to each later.
 
 **Step 4: group what's inside.**
@@ -66,10 +66,11 @@ These probabilities are **relative to the component**, not overall: they compare
 
 They're a starting hypothesis, not a measurement. Their job is to decide what to test first and most carefully.
 
-**Step 5: plan the tests.** Only replay shapes inside the rectangle; there's no need to test shapes blindly. Replay instances of each class, all of which **must fire**, varying only what the alert can tell apart: time.
+**Step 5: plan the tests.** The intent drives the tests. When we write an alert's rule (its query, windows, thresholds and `for`), we assume it complies with the intent; the tests verify that assumption. Only replay incidents that belong in the rectangle by intent, the ones the alert must catch; there's no need to test shapes blindly. When one of them doesn't fire, what the alert saw didn't reach the rectangle, and that's a blind spot. Replay instances of each class, all of which **must fire**, varying only what the alert can tell apart: time.
 
 1. **Spikes.** Vary the **width** of each spike (shorter than, about, and longer than `for`) and the **gap** between spikes (shorter than, about, and longer than the short window).
 2. **Plateaus.** Vary the **width** (duration) around the point where the long window can first cross the threshold, from too short to long, including a **surge**: a steep rise followed by a slow decay.
+3. **Traffic slices.** An incident that hits only part of the traffic, such as one small client that is completely down. Its own shape is inside the rectangle, but the alert measures all traffic together, which can push the shape it actually sees below the threshold.
 
 For each instance, report the alert's performance:
 
@@ -89,7 +90,7 @@ make clean && make up
 ./examples/kube-apiserver-slo/run.sh            # add --markdown for a Markdown table
 ```
 
-**Step 6: run the tests and read the profile.** `run.sh` replays all 24 instances (4 alerts × 6), each with 6 days of jagged, seeded traffic, and evaluates the rules over the last 3 days. The report, condensed (✓ fired, ✗ didn't; time from the start of the incident to the first firing; "fires" is the number of separate firings):
+**Step 6: run the tests and read the profile.** `run.sh` replays all 26 instances (4 alerts × 6, plus 2 traffic-slice instances), each with 6 days of jagged, seeded traffic, and evaluates the rules over the last 3 days. The report, condensed (✓ fired, ✗ didn't; time from the start of the incident to the first firing; "fires" is the number of separate firings):
 
 | Alert | plateau long | plateau short (0.6 L) | plateau shorter (0.45 L) | spikes regular | spikes uneven | spikes degrading |
 |---|---|---|---|---|---|---|
@@ -130,18 +131,25 @@ What the profile says:
 | The alert fires once per spike | all | `keep_firing_for` longer than the gap between spikes, so a recurring problem is one incident |
 | The alert flaps on uneven spikes | page-1h, page-6h, ticket-1d | `keep_firing_for` to bridge short dips |
 | The alert fires after the incident ended | ticket-3d | Accept it for a ticket, or shorten `for` |
+| The alert never fires when one client is down (dilution) | page-1h, page-6h, ticket-1d | SLOs or burn-rate alerts per client or per critical path |
+| Throttled requests (429) aren't counted at all | all | Decide whether 429s count as bad, and alert on them separately if not |
 
-> **Note: a blind spot this matrix doesn't cover.** All instances above vary the shape over *time*. A second kind of averaging happens across *traffic*: the SLO is computed over all requests together, so a problem that only hits part of the traffic, such as one important client, is diluted:
->
-> ```
-> burn the alert sees = share of traffic × error rate of that share ÷ error budget
-> ```
->
-> A client with 1% of the traffic who is completely down shows up as 1% × 100% ÷ 1% = **1×** under this 99% SLO: far below the 14.4× and 6× pages, and at best a 3d ticket after days. Each tier's own window pair (1h/5m, 6h/30m, 1d/2h, 3d/6h) doesn't help either. In the diagram, the client's own burn **(1)** is 100×, but both windows of page-1h, the 5m short window **(2)** and the 1h long window **(3)**, see only the diluted 1×. The alert needs long AND short above the threshold, so it **(4)** never fires. The same happens on page-6h and ticket-1d. Only ticket-3d, whose threshold is 1×, can eventually catch it, days later.
->
-> ![page-1h: a client with 1% of the traffic is completely down, but both windows see only 1x](img/dilution.svg)
->
-> This follows from the model; it hasn't been replayed in this matrix yet. The usual remedy is to segment: SLOs or burn-rate alerts per client (or per critical path), so each one is measured against its own traffic.
+**Traffic slices: a client that is completely down.** Two more instances: a big client with 99% of the traffic, healthy, and a small client with 1% that fails **all** its requests for 3 hours. In `client-down-5xx` the failures are 5xx errors. In `client-throttled-429` they are 429 rejections, the way API Priority and Fairness throttles a client. Any tier must fire.
+
+| Instance | Small client | What the alerts saw (5m and 1h burn) | Fired |
+|---|---|---|---|
+| client-down-5xx | 100% failing | 1.2× | **✗ no tier** |
+| client-throttled-429 | 100% rejected | 0.2× (the background only) | **✗ no tier** |
+
+Two blind spots stack up here:
+
+- **Dilution.** The burn rate is computed over all traffic, so a client with 1% of the requests failing completely only shows up as 1% × 100% ÷ 1% budget = 1× (1.2× with the background). The client's own burn **(1)** is 100×, but both of page-1h's windows, the 5m short window **(2)** and the 1h long window **(3)**, see only the diluted value, and the alert **(4)** never fires. The same holds on page-6h and ticket-1d; only ticket-3d, whose threshold is 1×, could catch a longer outage, days later.
+
+  ![page-1h: a client with 1% of the traffic is completely down, but both windows see only 1x](img/dilution.svg)
+
+- **Uncounted failures.** The SLI counts 5xx and slow requests as bad. A 429 is neither, so a throttled client doesn't even raise the burn: it stays at the 0.2× background. Even an alert measured per client wouldn't see it.
+
+Remedies to design and then replay: SLOs or burn-rate alerts per client (or per critical path), so each one is measured against its own traffic, and deciding whether 429s should count as bad.
 
 After a change, re-run the same scenario (`make clean && make up` first) and compare the reports.
 

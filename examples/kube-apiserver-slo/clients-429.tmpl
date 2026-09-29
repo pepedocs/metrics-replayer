@@ -1,0 +1,16 @@
+{{- /*
+  Two clients of one apiserver. The big client (99% of the traffic, 198 req/s)
+  is healthy: 0.2% bad requests, like the other instances' background. The
+  small client (1%, 2 req/s) is throttled: a fraction .Y of its requests is rejected with 429,
+  as API Priority and Fairness does. 429 is neither 5xx nor slow.
+*/ -}}
+apiserver_request_total{cluster="{{ .Name }}",client="big",code="500"} {{ counter "big_err" 0.198 }}
+apiserver_request_total{cluster="{{ .Name }}",client="big",code="200"} {{ counter "big_ok" 197.802 }}
+apiserver_request_sli_duration_seconds_count{cluster="{{ .Name }}",client="big"} {{ counter "big_count" 197.802 }}
+apiserver_request_sli_duration_seconds_bucket{cluster="{{ .Name }}",client="big",le="1"} {{ counter "big_fast" 197.604 }}
+apiserver_request_sli_duration_seconds_bucket{cluster="{{ .Name }}",client="big",le="+Inf"} {{ counter "big_inf" 197.802 }}
+apiserver_request_total{cluster="{{ .Name }}",client="small",code="429"} {{ counter "small_err" (mul 2 .Y) }}
+apiserver_request_total{cluster="{{ .Name }}",client="small",code="200"} {{ counter "small_ok" (mul 2 (sub 1 .Y)) }}
+apiserver_request_sli_duration_seconds_count{cluster="{{ .Name }}",client="small"} {{ counter "small_count" (mul 2 (sub 1 .Y)) }}
+apiserver_request_sli_duration_seconds_bucket{cluster="{{ .Name }}",client="small",le="1"} {{ counter "small_fast" (mul 2 (sub 1 .Y)) }}
+apiserver_request_sli_duration_seconds_bucket{cluster="{{ .Name }}",client="small",le="+Inf"} {{ counter "small_inf" (mul 2 (sub 1 .Y)) }}

@@ -136,3 +136,18 @@ instances:
     params: baseline=0.005,a=0.025,b=1,start=-4200m,unit=4320m,noise=0.5,noise_period=180m,seed=9
     alert: 'KubeAPIErrorBudgetBurn{long="3d",cluster="{{ .Name }}"}'
     incident: {start: -4200m}
+
+  # Traffic slices: one small client (1% of the traffic) is completely down
+  # for 3h, while the big client (99%) is healthy. Any tier must fire.
+  - name: client-down-5xx
+    shape: step
+    params: baseline=0.002,peak=1,start=-4200m,duration=180m
+    template: clients-5xx.tmpl
+    alert: 'KubeAPIErrorBudgetBurn{cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: -4020m}
+  - name: client-throttled-429
+    shape: step
+    params: baseline=0.002,peak=1,start=-4200m,duration=180m
+    template: clients-429.tmpl
+    alert: 'KubeAPIErrorBudgetBurn{cluster="{{ .Name }}"}'
+    incident: {start: -4200m, end: -4020m}
